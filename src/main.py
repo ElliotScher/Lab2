@@ -13,7 +13,7 @@ from vex import *
 # Brain should be defined by default
 brain = Brain()
 
-frontSonar = Sonar(brain.three_wire_port.g)
+imu = Inertial(Ports.PORT3)
 
 button = Bumper(brain.three_wire_port.e)
 
@@ -21,12 +21,22 @@ leftDrive = Motor(Ports.PORT10, True)
 rightDrive = Motor(Ports.PORT1, False)
 
 WHEEL_DIAMETER_IN = 4
+WHEEL_BASE_IN = 11.625
 GEAR_RATIO = 5
 
-FORWARD_SPEED_M_PER_S = 0.05
-TARGET_DISTANCE_FROM_WALL_IN = 5
-WALL_KP = 15
-WALL_KD = 5
+ROTATION_SPEED_RAD_PER_SEC = math.pi
+TARGET_HEADING = 180
+TURN_KP = 4
+TURN_KD = 2.9375
+
+imu.set_turn_type(TurnType.LEFT)
+imu.calibrate()
+imu.reset_heading()
+
+while imu.is_calibrating():
+    pass
+
+print("IMU CALIBRATED")
 
 while True:
     while not button.pressing():
@@ -37,25 +47,30 @@ while True:
 
     prevError = 0
     while True:
-        # dimensional analysis to turn m/s into rpm
-        rpm = (FORWARD_SPEED_M_PER_S * 39.3701 * 60) / (WHEEL_DIAMETER_IN * math.pi)
+        # dimensional analysis to turn robot rad/sec into wheel rpm
+        rpm = (ROTATION_SPEED_RAD_PER_SEC * WHEEL_BASE_IN * 60) / (2 * math.pi)
 
-        error = frontSonar.distance(DistanceUnits.IN) - TARGET_DISTANCE_FROM_WALL_IN
+        error = TARGET_HEADING - imu.heading()
+
+        if error > 180:
+            error -= 360
+        elif error < -180:
+            error += 360
+
+        print(imu.heading())
 
         # change in error per second
         rate = (error - prevError) / 0.2
 
-        effort = (error * WALL_KP) + (rate * WALL_KD)
+        effort = (error * TURN_KP) + (rate * TURN_KD)
 
         if abs(effort) > rpm:
             effort = math.copysign(rpm, effort)
 
-        leftDrive.spin(FORWARD, effort * GEAR_RATIO)
+        leftDrive.spin(REVERSE, effort * GEAR_RATIO)
         rightDrive.spin(FORWARD, effort * GEAR_RATIO)
 
         prevError = error
-
-        print(frontSonar.distance(DistanceUnits.IN))
 
         if button.pressing():
             break
