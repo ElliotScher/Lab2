@@ -9,15 +9,13 @@
 
 # Library imports
 from vex import *
-# import matplotlib.pyplot
 
 # Brain should be defined by default
 brain = Brain()
 
-leftReflectance = Line(brain.three_wire_port.d)
-rightReflectance = Line(brain.three_wire_port.c)
+rightSonar = Sonar(brain.three_wire_port.a)
 
-button = Bumper(brain.three_wire_port.g)
+button = Bumper(brain.three_wire_port.e)
 
 leftDrive = Motor(Ports.PORT10, True)
 rightDrive = Motor(Ports.PORT1, False)
@@ -25,9 +23,10 @@ rightDrive = Motor(Ports.PORT1, False)
 WHEEL_DIAMETER_IN = 4
 GEAR_RATIO = 5
 
-FORWARD_SPEED_M_PER_S = 0.1
-LINE_KP = 0.15
-LINE_KD = 0.15
+FORWARD_SPEED_M_PER_S = 0.2
+TARGET_DISTANCE_FROM_WALL_IN = 10
+WALL_KP = 30
+WALL_KD = 270
 
 while True:
     while not button.pressing():
@@ -41,18 +40,22 @@ while True:
         # dimensional analysis to turn m/s into rpm
         rpm = (FORWARD_SPEED_M_PER_S * 39.3701 * 60) / (WHEEL_DIAMETER_IN * math.pi)
 
-        # calculated such that error to the right is positive
-        error = leftReflectance.reflectivity() - rightReflectance.reflectivity()
+        error = rightSonar.distance(DistanceUnits.IN) - TARGET_DISTANCE_FROM_WALL_IN
 
         # change in error per second
         rate = (error - prevError) / 0.2
 
-        effort = (error * LINE_KP) + (rate * LINE_KD)
+        effort = (error * WALL_KP * FORWARD_SPEED_M_PER_S) + (rate * WALL_KD * FORWARD_SPEED_M_PER_S)
 
-        leftDrive.spin(FORWARD, (rpm - effort) * GEAR_RATIO)
-        rightDrive.spin(FORWARD, (rpm + effort) * GEAR_RATIO)
+        leftCmd = rpm - effort
+        rightCmd = rpm + effort
+
+        leftDrive.spin(FORWARD, leftCmd * GEAR_RATIO)
+        rightDrive.spin(FORWARD, rightCmd * GEAR_RATIO)
 
         prevError = error
+
+        print(rightSonar.distance(DistanceUnits.IN))
 
         if button.pressing():
             break
