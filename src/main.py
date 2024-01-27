@@ -13,7 +13,7 @@ from vex import *
 # Brain should be defined by default
 brain = Brain()
 
-rightSonar = Sonar(brain.three_wire_port.a)
+frontSonar = Sonar(brain.three_wire_port.g)
 
 button = Bumper(brain.three_wire_port.e)
 
@@ -23,10 +23,10 @@ rightDrive = Motor(Ports.PORT1, False)
 WHEEL_DIAMETER_IN = 4
 GEAR_RATIO = 5
 
-FORWARD_SPEED_M_PER_S = 0.2
-TARGET_DISTANCE_FROM_WALL_IN = 10
-WALL_KP = 30
-WALL_KD = 270
+FORWARD_SPEED_M_PER_S = 0.05
+TARGET_DISTANCE_FROM_WALL_IN = 5
+WALL_KP = 15
+WALL_KD = 5
 
 while True:
     while not button.pressing():
@@ -40,22 +40,22 @@ while True:
         # dimensional analysis to turn m/s into rpm
         rpm = (FORWARD_SPEED_M_PER_S * 39.3701 * 60) / (WHEEL_DIAMETER_IN * math.pi)
 
-        error = rightSonar.distance(DistanceUnits.IN) - TARGET_DISTANCE_FROM_WALL_IN
+        error = frontSonar.distance(DistanceUnits.IN) - TARGET_DISTANCE_FROM_WALL_IN
 
         # change in error per second
         rate = (error - prevError) / 0.2
 
-        effort = (error * WALL_KP * FORWARD_SPEED_M_PER_S) + (rate * WALL_KD * FORWARD_SPEED_M_PER_S)
+        effort = (error * WALL_KP) + (rate * WALL_KD)
 
-        leftCmd = rpm - effort
-        rightCmd = rpm + effort
+        if abs(effort) > rpm:
+            effort = math.copysign(rpm, effort)
 
-        leftDrive.spin(FORWARD, leftCmd * GEAR_RATIO)
-        rightDrive.spin(FORWARD, rightCmd * GEAR_RATIO)
+        leftDrive.spin(FORWARD, effort * GEAR_RATIO)
+        rightDrive.spin(FORWARD, effort * GEAR_RATIO)
 
         prevError = error
 
-        print(rightSonar.distance(DistanceUnits.IN))
+        print(frontSonar.distance(DistanceUnits.IN))
 
         if button.pressing():
             break
