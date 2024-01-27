@@ -25,8 +25,8 @@ GEAR_RATIO = 5
 
 FORWARD_SPEED_M_PER_S = 0.2
 TARGET_DISTANCE_FROM_WALL_IN = 10
-WALL_KP = 30
-WALL_KD = 270
+WALL_KP_PER_M_PER_S = 30
+WALL_KD_PER_M_PER_S = 270
 
 while True:
     while not button.pressing():
@@ -45,7 +45,7 @@ while True:
         # change in error per second
         rate = (error - prevError) / 0.2
 
-        effort = (error * WALL_KP * FORWARD_SPEED_M_PER_S) + (rate * WALL_KD * FORWARD_SPEED_M_PER_S)
+        effort = (error * WALL_KP_PER_M_PER_S * FORWARD_SPEED_M_PER_S) + (rate * WALL_KD_PER_M_PER_S * FORWARD_SPEED_M_PER_S)
 
         leftCmd = rpm - effort
         rightCmd = rpm + effort
