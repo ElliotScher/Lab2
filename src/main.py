@@ -27,14 +27,12 @@ from vex import *
 
 brain = Brain()
 
-leftReflectance = Line(brain.three_wire_port.d)
-rightReflectance = Line(brain.three_wire_port.c)
-
 button = Bumper(brain.three_wire_port.e)
 
 imu = Inertial(Ports.PORT3)
 
-ultrasonic = Sonar(brain.three_wire_port.g)
+sideSonar = Sonar(brain.three_wire_port.a)
+frontSonar = Sonar(brain.three_wire_port.g)
 
 leftDrive = Motor(Ports.PORT10, True)
 rightDrive = Motor(Ports.PORT1, False)
@@ -43,12 +41,13 @@ WHEEL_DIAMETER_IN = 4
 WHEEL_BASE_IN = 11.625
 GEAR_RATIO = 5
 
-FORWARD_SPEED_M_PER_S = 0.1
-LINE_KP = 0.15
-LINE_KD = 0.15
+FORWARD_SPEED_M_PER_S = 0.2
+TARGET_DISTANCE_FROM_WALL_IN = 5.5
+WALL_KP_PER_M_PER_S = 10
+WALL_KD_PER_M_PER_S = 1000
 
 ROTATION_SPEED_RAD_PER_SEC = math.pi
-TARGET_HEADING = 180
+TARGET_HEADING = -90
 TURN_KP = 4
 TURN_KD = 2.9375
 
@@ -56,7 +55,6 @@ TURN_KD = 2.9375
 prevError = 0
 
 state = 0
-
 
 imu.set_turn_type(TurnType.LEFT)
 imu.calibrate()
@@ -78,36 +76,32 @@ def idleState():
         setState(1)
 
 def followState():
-    global state
     global prevError
     # dimensional analysis to turn m/s into rpm
     rpm = (FORWARD_SPEED_M_PER_S * 39.3701 * 60) / (WHEEL_DIAMETER_IN * math.pi)
 
-    # calculated such that error to the right is positive
-    error = leftReflectance.reflectivity() - rightReflectance.reflectivity()
+    error = sideSonar.distance(DistanceUnits.IN) - TARGET_DISTANCE_FROM_WALL_IN
 
     # change in error per second
     rate = (error - prevError) / 0.2
 
-    effort = (error * LINE_KP) + (rate * LINE_KD)
+    effort = (error * WALL_KP_PER_M_PER_S * FORWARD_SPEED_M_PER_S) + (rate * WALL_KD_PER_M_PER_S * FORWARD_SPEED_M_PER_S)
 
-    leftDrive.spin(FORWARD, (rpm - effort) * GEAR_RATIO)
-    rightDrive.spin(FORWARD, (rpm + effort) * GEAR_RATIO)
+    leftCmd = rpm - effort
+    rightCmd = rpm + effort
+
+    leftDrive.spin(REVERSE, leftCmd * GEAR_RATIO)
+    rightDrive.spin(REVERSE, rightCmd * GEAR_RATIO)
 
     prevError = error
 
-    if ultrasonic.distance(INCHES) <= 6:
-        prevError = 0
-        leftDrive.stop()
-        rightDrive.stop()
-        setState(2)
+    print(sideSonar.distance(DistanceUnits.IN))
 
-    if button.pressing():
+    if frontSonar.distance(INCHES) <= 6 and button.pressing():
         prevError = 0
         setState(2)
 
 def rotateState():
-    global state
     global prevError
     # dimensional analysis to turn robot rad/sec into wheel rpm
     rpm = (ROTATION_SPEED_RAD_PER_SEC * WHEEL_BASE_IN * 60) / (2 * math.pi)
@@ -137,7 +131,7 @@ def rotateState():
     if button.pressing():
         leftDrive.stop()
         rightDrive.stop()
-        setState(3)
+        setState(1)
 
 while True:
     print(state)
@@ -147,5 +141,3 @@ while True:
         followState()
     if state == 2:
         rotateState()
-    if state == 3:
-        followState()
