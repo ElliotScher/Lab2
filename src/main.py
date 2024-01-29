@@ -43,7 +43,7 @@ WHEEL_DIAMETER_IN = 4
 WHEEL_BASE_IN = 11.625
 GEAR_RATIO = 5
 
-FORWARD_SPEED_M_PER_S = 0.1
+FORWARD_SPEED_M_PER_S = 0.2
 LINE_KP = 0.15
 LINE_KD = 0.15
 
@@ -52,6 +52,10 @@ TARGET_HEADING = 180
 TURN_KP = 4
 TURN_KD = 2.9375
 
+TARGET_DISTANCE_FROM_WALL_IN = 6
+
+WALL_KP = 15
+WALL_KD = 5
 
 prevError = 0
 
@@ -70,45 +74,64 @@ print("IMU CALIBRATED")
 def setState(new):
     global state
     state = new
+    if(state == 2):
+        imu.reset_heading()
     wait(500)
 
 def idleState():
-    global state
+    global nextState
     if button.pressing():
         setState(1)
 
+prevLineError = 0
 def followState():
     global state
     global prevError
+    global prevLineError
+    global nextState
     # dimensional analysis to turn m/s into rpm
     rpm = (FORWARD_SPEED_M_PER_S * 39.3701 * 60) / (WHEEL_DIAMETER_IN * math.pi)
 
     # calculated such that error to the right is positive
-    error = leftReflectance.reflectivity() - rightReflectance.reflectivity()
+    lineError = leftReflectance.reflectivity() - rightReflectance.reflectivity()
+
+    wallError = ultrasonic.distance(INCHES) - TARGET_DISTANCE_FROM_WALL_IN
+
+    print(ultrasonic.distance(INCHES))
 
     # change in error per second
-    rate = (error - prevError) / 0.2
+    lineRate = (lineError - prevLineError) / 0.2
 
-    effort = (error * LINE_KP) + (rate * LINE_KD)
+    lineEffort = (lineError * LINE_KP) + (lineRate * LINE_KD)
 
-    leftDrive.spin(FORWARD, (rpm - effort) * GEAR_RATIO)
-    rightDrive.spin(FORWARD, (rpm + effort) * GEAR_RATIO)
+    wallRate = (wallError - prevError) / 0.2
 
-    prevError = error
+    wallEffort = (wallError * WALL_KP) + (wallRate * WALL_KD)
 
-    if ultrasonic.distance(INCHES) <= 6:
+
+    if abs(wallEffort) > rpm:
+        wallEffort = math.copysign(rpm, wallEffort)
+
+    leftDrive.spin(FORWARD, (wallEffort - lineEffort) * GEAR_RATIO)
+    rightDrive.spin(FORWARD, (wallEffort + lineEffort) * GEAR_RATIO)
+
+    prevError = wallError
+    prevLineError = lineError
+
+    if button.pressing() or abs(wallError) < 0.03:
         prevError = 0
+        lineError = 0
         leftDrive.stop()
         rightDrive.stop()
-        setState(2)
-
-    if button.pressing():
-        prevError = 0
-        setState(2)
+        if state == 1:
+            setState(2)
+        elif state == 3:
+            setState(0)
 
 def rotateState():
     global state
     global prevError
+    global nextState
     # dimensional analysis to turn robot rad/sec into wheel rpm
     rpm = (ROTATION_SPEED_RAD_PER_SEC * WHEEL_BASE_IN * 60) / (2 * math.pi)
 
@@ -134,13 +157,13 @@ def rotateState():
 
     prevError = error
 
-    if button.pressing():
+    if button.pressing() or (abs(error) < 0.25 and abs(rate) < 1):
         leftDrive.stop()
         rightDrive.stop()
         setState(3)
 
 while True:
-    print(state)
+    # print(state)
     if state == 0:
         idleState()
     if state == 1:
@@ -149,3 +172,5 @@ while True:
         rotateState()
     if state == 3:
         followState()
+
+    wait(20)
